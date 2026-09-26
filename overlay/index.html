@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Арена наследия — тестовый бой</title>
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=zodiak@600,700&f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/overlay/styles.css">
+  <script type="module" src="/overlay/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#controls">К панели управления</a>
+  <main class="app-shell">
+    <section class="arena-frame" aria-label="Боевая арена">
+      <header class="arena-header">
+        <div class="brand" aria-label="Арена наследия">
+          <svg class="brand-mark" viewBox="0 0 48 48" role="img" aria-hidden="true">
+            <path d="M24 4 39 12v18L24 44 9 30V12L24 4Z"/>
+            <path d="m15 29 9-16 9 16-9 7-9-7Z"/>
+            <path d="M17 24h14"/>
+          </svg>
+          <div><span>АРЕНА</span><strong>НАСЛЕДИЯ</strong></div>
+        </div>
+        <div class="round-status" id="roundStatus" aria-live="polite">Ожидание боя</div>
+      </header>
+
+      <div class="battle-stage" id="battleStage">
+        <div class="atmosphere" aria-hidden="true"></div>
+        <div class="versus-seal" aria-hidden="true"><span>VS</span></div>
+
+        <article class="fighter-slot fighter-slot--left" data-slot="left" id="fighterLeft">
+          <div class="fighter-card">
+            <div class="fighter-meta">
+              <span class="level" id="leftLevel">УР. 1</span>
+              <div><h1 id="leftName">Caelestial</h1><p id="leftClass">Дуэлист</p></div>
+            </div>
+            <div class="hp-track" role="progressbar" aria-label="Здоровье левого бойца" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+              <div class="hp-fill" id="leftHpFill"></div>
+              <span class="hp-text" id="leftHpText">100 / 100</span>
+            </div>
+          </div>
+          <div class="fighter-anchor">
+            <img class="fighter-image" id="leftImage" src="/overlay/assets/characters/duelist/idle.png" width="1024" height="1024" alt="Дуэлист с парными мечами">
+            <div class="ground-shadow" aria-hidden="true"></div>
+          </div>
+        </article>
+
+        <article class="fighter-slot fighter-slot--right" data-slot="right" id="fighterRight">
+          <div class="fighter-card">
+            <div class="fighter-meta fighter-meta--right">
+              <div><h1 id="rightName">SilverArrow</h1><p id="rightClass">Стрелок</p></div>
+              <span class="level" id="rightLevel">УР. 1</span>
+            </div>
+            <div class="hp-track" role="progressbar" aria-label="Здоровье правого бойца" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+              <div class="hp-fill" id="rightHpFill"></div>
+              <span class="hp-text" id="rightHpText">100 / 100</span>
+            </div>
+          </div>
+          <div class="fighter-anchor">
+            <img class="fighter-image" id="rightImage" src="/overlay/assets/characters/archer/idle.png" width="874" height="1331" alt="Лучник в светлой броне">
+            <div class="ground-shadow" aria-hidden="true"></div>
+          </div>
+        </article>
+
+        <div class="projectile" id="projectile" aria-hidden="true"><span></span></div>
+        <div class="impact" id="impact" aria-hidden="true"></div>
+        <div class="battle-result" id="battleResult" role="status" aria-live="assertive">
+          <span class="battle-result__eyebrow">ПОБЕДИТЕЛЬ</span>
+          <strong id="winnerName">Caelestial</strong>
+          <span id="winnerReward">+5 опыта</span>
+        </div>
+      </div>
+
+      <footer class="battle-log" aria-label="Журнал боя">
+        <div class="battle-log__label"><span></span> Ход боя</div>
+        <ol id="battleLog" aria-live="polite"></ol>
+      </footer>
+    </section>
+
+    <aside class="control-panel" id="controls" aria-label="Тестовая панель">
+      <div class="control-panel__heading">
+        <div><span class="kicker">Локальный тест</span><h2>Управление боем</h2></div>
+        <span class="connection" id="connectionStatus"><i></i> Автономно</span>
+      </div>
+
+      <div class="control-grid">
+        <fieldset>
+          <legend>Боец слева</legend>
+          <label>Никнейм<input id="leftNameInput" value="Caelestial" maxlength="24"></label>
+          <label>Класс<select id="leftClassInput"><option value="duelist">Дуэлист</option><option value="archer">Стрелок</option></select></label>
+          <label>Уровень<input id="leftLevelInput" type="number" value="1" min="1" max="100"></label>
+        </fieldset>
+        <fieldset>
+          <legend>Боец справа</legend>
+          <label>Никнейм<input id="rightNameInput" value="SilverArrow" maxlength="24"></label>
+          <label>Класс<select id="rightClassInput"><option value="archer">Стрелок</option><option value="duelist">Дуэлист</option></select></label>
+          <label>Уровень<input id="rightLevelInput" type="number" value="1" min="1" max="100"></label>
+        </fieldset>
+      </div>
+
+      <div class="control-actions">
+        <button class="button button--primary" id="startBattle">Запустить полный бой</button>
+        <button class="button button--secondary" id="resetBattle">Сбросить арену</button>
+      </div>
+      <p class="control-note">Эта панель используется только при локальной проверке. Для OBS добавьте к адресу параметр <code>?overlay=1</code>.</p>
+    </aside>
+  </main>
+</body>
+</html>

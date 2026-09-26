@@ -1,0 +1,28 @@
+{
+  "duelist": {
+    "id": "duelist",
+    "name": "Дуэлист",
+    "role": "melee",
+    "baseHp": 100,
+    "baseDamage": 10,
+    "hpPerLevel": 2,
+    "damagePerLevel": 1,
+    "dodgePerLevel": 1,
+    "critPerLevel": 0,
+    "critMultiplier": 1.75,
+    "asset": "/overlay/assets/characters/duelist/idle.png"
+  },
+  "archer": {
+    "id": "archer",
+    "name": "Стрелок",
+    "role": "ranged",
+    "baseHp": 100,
+    "baseDamage": 10,
+    "hpPerLevel": 2,
+    "damagePerLevel": 1,
+    "dodgePerLevel": 0,
+    "critPerLevel": 1,
+    "critMultiplier": 1.75,
+    "asset": "/overlay/assets/characters/archer/idle.png"
+  }
+}
