@@ -1,241 +1,30 @@
-import { buildFighter, createBattle, SeededRandom } from '../src/game-core.js';
+import { buildFighter, createBattle, SeededRandom } from '/src/game-core.js';
 
-const $ = (selector) => document.querySelector(selector);
+const qs = (selector) => document.querySelector(selector);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const params = new URLSearchParams(location.search);
-if (params.get('overlay') === '1') document.body.classList.add('overlay-mode');
-
+const state = { classes: null, balance: null, socket: null, playing: false, currentBattleId: null, fighters: new Map(), slots: new Map(), demoCounter: 0 };
 const elements = {
-  stage: $('#battleStage'), status: $('#roundStatus'), log: $('#battleLog'), result: $('#battleResult'),
-  winnerName: $('#winnerName'), winnerReward: $('#winnerReward'), start: $('#startBattle'), reset: $('#resetBattle'),
-  projectile: $('#projectile'), impact: $('#impact'), connection: $('#connectionStatus'),
-  slots: {
-    left: { root: $('#fighterLeft'), image: $('#leftImage'), name: $('#leftName'), className: $('#leftClass'), level: $('#leftLevel'), fill: $('#leftHpFill'), text: $('#leftHpText'), track: $('#fighterLeft .hp-track') },
-    right: { root: $('#fighterRight'), image: $('#rightImage'), name: $('#rightName'), className: $('#rightClass'), level: $('#rightLevel'), fill: $('#rightHpFill'), text: $('#rightHpText'), track: $('#fighterRight .hp-track') }
-  }
+  stage: qs('#battleStage'), status: qs('#roundStatus'), result: qs('#battleResult'), winnerName: qs('#winnerName'), winnerReward: qs('#winnerReward'), log: qs('#battleLog'), projectile: qs('#projectile'), impact: qs('#impact'), start: qs('#startBattle'), reset: qs('#resetBattle'), queue: qs('#queueCount'), connectionDot: qs('#connectionDot'), connectionText: qs('#connectionText'), form: qs('#testCommandForm'), user: qs('#testUser'), command: qs('#testCommand'), replies: qs('#chatReplies')
+};
+const slotElements = {
+  left: { root: qs('#fighterLeft'), name: qs('#leftName'), className: qs('#leftClass'), level: qs('#leftLevel'), hpFill: qs('#leftHpFill'), hpText: qs('#leftHpText'), image: qs('#leftImage') },
+  right: { root: qs('#fighterRight'), name: qs('#rightName'), className: qs('#rightClass'), level: qs('#rightLevel'), hpFill: qs('#rightHpFill'), hpText: qs('#rightHpText'), image: qs('#rightImage') }
 };
 
-let classes;
-let balance;
-let battleRunning = false;
-let currentFighters = [];
-let socket;
-
-async function loadConfig() {
-  [classes, balance] = await Promise.all([
-    fetch('../config/classes.json').then((response) => response.json()),
-    fetch('../config/balance.json').then((response) => response.json())
-  ]);
-  resetArena();
-  connectWebSocket();
+function setFighter(slotName, fighter) {
+  const slot = slotElements[slotName]; state.fighters.set(fighter.id, structuredClone(fighter)); state.slots.set(fighter.id, slotName);
+  slot.name.textContent = fighter.username; slot.className.textContent = fighter.className; slot.level.textContent = `УР. ${fighter.level}`; slot.image.src = fighter.asset; slot.image.alt = `${fighter.className}: ${fighter.username}`; slot.root.className = `fighter-slot fighter-slot--${slotName}`; updateHp(fighter.id, fighter.hp, fighter.maxHp);
 }
-
-function formFighter(side) {
-  const prefix = side === 'left' ? 'left' : 'right';
-  return buildFighter({
-    id: side,
-    username: $(`#${prefix}NameInput`).value.trim() || (side === 'left' ? 'Игрок 1' : 'Игрок 2'),
-    classId: $(`#${prefix}ClassInput`).value,
-    level: Number($(`#${prefix}LevelInput`).value)
-  }, classes);
-}
-
-function renderFighter(side, fighter) {
-  const ui = elements.slots[side];
-  ui.root.dataset.fighterId = fighter.id;
-  ui.root.dataset.role = fighter.role;
-  ui.name.textContent = fighter.username;
-  ui.className.textContent = fighter.className;
-  ui.level.textContent = `УР. ${fighter.level}`;
-  ui.image.src = fighter.asset;
-  ui.image.alt = `${fighter.className}, ${fighter.username}`;
-  ui.root.classList.toggle('is-archer', fighter.classId === 'archer');
-  setHp(side, fighter.hp, fighter.maxHp);
-}
-
-function setHp(side, hp, maxHp) {
-  const ui = elements.slots[side];
-  const safeHp = Math.max(0, Math.min(maxHp, hp));
-  const percent = maxHp ? (safeHp / maxHp) * 100 : 0;
-  ui.fill.style.width = `${percent}%`;
-  ui.text.textContent = `${safeHp} / ${maxHp}`;
-  ui.track.setAttribute('aria-valuemax', String(maxHp));
-  ui.track.setAttribute('aria-valuenow', String(safeHp));
-}
-
-function addLog(message) {
-  const item = document.createElement('li');
-  item.textContent = message;
-  elements.log.prepend(item);
-  while (elements.log.children.length > 3) elements.log.lastElementChild.remove();
-}
-
-function clearTransientClasses() {
-  Object.values(elements.slots).forEach(({ root }) => root.classList.remove('is-approaching', 'is-attacking', 'is-ranged', 'is-hit', 'is-dodging'));
-}
-
-function resetArena() {
-  if (!classes) return;
-  battleRunning = false;
-  elements.start.disabled = false;
-  elements.result.classList.remove('is-visible');
-  elements.log.replaceChildren();
-  elements.status.textContent = 'Ожидание боя';
-  Object.values(elements.slots).forEach(({ root }) => root.className = root.classList.contains('fighter-slot--left') ? 'fighter-slot fighter-slot--left' : 'fighter-slot fighter-slot--right');
-  currentFighters = [formFighter('left'), formFighter('right')];
-  renderFighter('left', currentFighters[0]);
-  renderFighter('right', currentFighters[1]);
-  addLog('Арена готова. Запустите тестовый бой.');
-}
-
-function sideById(id) {
-  return currentFighters[0]?.id === id ? 'left' : 'right';
-}
-
-function pointFor(slot, kind = 'center') {
-  const rect = elements.slots[slot].image.getBoundingClientRect();
-  const stageRect = elements.stage.getBoundingClientRect();
-  const xRatio = kind === 'launch' ? (slot === 'left' ? .72 : .28) : .5;
-  return { x: rect.left - stageRect.left + rect.width * xRatio, y: rect.top - stageRect.top + rect.height * .44 };
-}
-
-async function animateProjectile(actorSide, targetSide) {
-  const start = pointFor(actorSide, 'launch');
-  const end = pointFor(targetSide);
-  const projectile = elements.projectile;
-  const angle = Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
-  projectile.style.display = 'block';
-  projectile.style.left = `${start.x}px`;
-  projectile.style.top = `${start.y}px`;
-  projectile.style.transform = `translate(0,0) rotate(${angle}deg)`;
-  projectile.style.transition = 'none';
-  void projectile.offsetWidth;
-  projectile.style.transition = `transform ${balance.battle.projectileMs}ms linear`;
-  projectile.style.transform = `translate(${end.x - start.x}px,${end.y - start.y}px) rotate(${angle}deg)`;
-  await sleep(balance.battle.projectileMs);
-  projectile.style.display = 'none';
-  elements.impact.style.left = `${end.x}px`;
-  elements.impact.style.top = `${end.y}px`;
-  elements.impact.classList.remove('is-active');
-  void elements.impact.offsetWidth;
-  elements.impact.classList.add('is-active');
-}
-
-function showDamage(side, amount, critical) {
-  const point = pointFor(side);
-  const number = document.createElement('span');
-  number.className = `damage-number${critical ? ' critical' : ''}`;
-  number.textContent = critical ? `КРИТ −${amount}` : `−${amount}`;
-  number.style.left = `${point.x}px`;
-  number.style.top = `${point.y}px`;
-  elements.stage.append(number);
-  number.addEventListener('animationend', () => number.remove(), { once: true });
-}
-
-async function playEvents(events) {
-  for (const event of events) {
-    const actorSide = event.actorId ? sideById(event.actorId) : null;
-    const targetSide = event.targetId ? sideById(event.targetId) : null;
-    const actor = event.actorId ? currentFighters.find((fighter) => fighter.id === event.actorId) : null;
-    const target = event.targetId ? currentFighters.find((fighter) => fighter.id === event.targetId) : null;
-
-    if (event.type === 'battle:start') {
-      elements.status.textContent = 'Бой начался';
-      addLog(`${currentFighters[0].username} и ${currentFighters[1].username} вступают в бой.`);
-      await sleep(700);
-    }
-    if (event.type === 'turn:start') {
-      elements.status.textContent = `Ход ${event.turn}`;
-      clearTransientClasses();
-      await sleep(balance.battle.turnDelayMs);
-    }
-    if (event.type === 'attack') {
-      const actorUi = elements.slots[actorSide];
-      if (event.role === 'melee') {
-        actorUi.root.classList.add('is-approaching');
-        await sleep(balance.battle.meleeApproachMs);
-        actorUi.root.classList.add('is-attacking');
-        addLog(`${actor.username} атакует ${target.username} в ближнем бою.`);
-        await sleep(balance.battle.attackMs);
-      } else {
-        actorUi.root.classList.add('is-ranged');
-        addLog(`${actor.username} выпускает стрелу в ${target.username}.`);
-        await sleep(240);
-        await animateProjectile(actorSide, targetSide);
-      }
-    }
-    if (event.type === 'dodge') {
-      elements.slots[targetSide].root.classList.add('is-dodging');
-      addLog(`${target.username} уклоняется от атаки.`);
-      await sleep(balance.battle.damagePauseMs);
-    }
-    if (event.type === 'damage') {
-      const fighter = currentFighters.find((item) => item.id === event.targetId);
-      fighter.hp = event.targetHp;
-      setHp(targetSide, event.targetHp, event.targetMaxHp);
-      elements.slots[targetSide].root.classList.add('is-hit');
-      showDamage(targetSide, event.damage, event.critical);
-      addLog(`${target.username} получает ${event.damage} урона${event.critical ? ' — критический удар!' : '.'}`);
-      await sleep(balance.battle.damagePauseMs);
-    }
-    if (event.type === 'death') {
-      const side = sideById(event.fighterId);
-      const fallen = currentFighters.find((fighter) => fighter.id === event.fighterId);
-      elements.slots[side].root.classList.add('is-dead');
-      addLog(`${fallen.username} повержен.`);
-      await sleep(800);
-    }
-    if (event.type === 'battle:end') {
-      const winner = currentFighters.find((fighter) => fighter.id === event.winnerId);
-      elements.status.textContent = `Бой окончен · ${event.turns} ходов`;
-      elements.winnerName.textContent = winner.username;
-      elements.winnerReward.textContent = `+${balance.progression.winnerXp} опыта`;
-      elements.result.classList.add('is-visible');
-      addLog(`${winner.username} побеждает и получает ${balance.progression.winnerXp} опыта.`);
-      await sleep(balance.battle.endPauseMs);
-    }
-  }
-  battleRunning = false;
-  elements.start.disabled = false;
-}
-
-async function startLocalBattle() {
-  if (battleRunning) return;
-  resetArena();
-  battleRunning = true;
-  elements.start.disabled = true;
-  const random = new SeededRandom(Date.now());
-  const result = createBattle({ fighter1: currentFighters[0], fighter2: currentFighters[1], maxTurns: balance.battle.maxTurns, random: () => random.next() });
-  await playEvents(result.events);
-}
-
-async function handleExternalBattle(payload) {
-  if (battleRunning || !payload?.fighters?.length) return;
-  battleRunning = true;
-  currentFighters = payload.fighters.map((fighter) => buildFighter(fighter, classes));
-  renderFighter('left', currentFighters[0]);
-  renderFighter('right', currentFighters[1]);
-  const result = createBattle({ fighter1: currentFighters[0], fighter2: currentFighters[1], maxTurns: balance.battle.maxTurns });
-  await playEvents(result.events);
-}
-
-function connectWebSocket() {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  try {
-    socket = new WebSocket(`${protocol}//${location.hostname || 'localhost'}:8081`);
-    socket.addEventListener('open', () => { elements.connection.innerHTML = '<i></i> WebSocket подключён'; elements.connection.classList.add('is-online'); });
-    socket.addEventListener('message', (message) => {
-      try {
-        const payload = JSON.parse(message.data);
-        if (payload.type === 'battle:start') handleExternalBattle(payload);
-        if (payload.type === 'arena:reset') resetArena();
-      } catch (error) { console.error('Некорректное событие WebSocket', error); }
-    });
-    socket.addEventListener('close', () => { elements.connection.innerHTML = '<i></i> Автономно'; elements.connection.classList.remove('is-online'); });
-  } catch (error) { console.info('Работаем без WebSocket', error); }
-}
-
-elements.start.addEventListener('click', startLocalBattle);
-elements.reset.addEventListener('click', resetArena);
-['leftNameInput','leftClassInput','leftLevelInput','rightNameInput','rightClassInput','rightLevelInput'].forEach((id) => $(`#${id}`).addEventListener('change', () => { if (!battleRunning) resetArena(); }));
-loadConfig().catch((error) => { console.error(error); elements.status.textContent = 'Ошибка загрузки'; addLog('Не удалось загрузить конфигурацию. Запускайте проект через npm start.'); });
+function updateHp(id, hp, maxHp) { const slot = slotElements[state.slots.get(id)]; if (!slot) return; const percent = Math.max(0, Math.min(100, hp / maxHp * 100)); slot.hpFill.style.width = `${percent}%`; slot.hpText.textContent = `${hp} / ${maxHp}`; const track = slot.hpFill.parentElement; track.setAttribute('aria-valuenow', String(hp)); track.setAttribute('aria-valuemax', String(maxHp)); }
+function addLog(text) { const item = document.createElement('li'); item.textContent = text; elements.log.prepend(item); while (elements.log.children.length > 4) elements.log.lastElementChild.remove(); }
+function addReply(text) { const item = document.createElement('li'); item.textContent = text; elements.replies.prepend(item); while (elements.replies.children.length > 6) elements.replies.lastElementChild.remove(); }
+function clearMotion() { Object.values(slotElements).forEach((slot) => slot.root.classList.remove('is-approaching','is-attacking','is-ranged-attacking','is-hurt','is-dodging')); }
+function floatText(id, text, className = '') { const slot = slotElements[state.slots.get(id)]; if (!slot) return; const label = document.createElement('span'); label.className = `damage-number ${className}`; label.textContent = text; slot.root.append(label); label.addEventListener('animationend', () => label.remove(), { once:true }); }
+async function animateAttack(event) { const actorSlot = slotElements[state.slots.get(event.actorId)]; const targetSlotName = state.slots.get(event.targetId); if (event.role === 'melee') { actorSlot.root.classList.add('is-approaching'); await sleep(state.balance.battle.meleeApproachMs); actorSlot.root.classList.add('is-attacking'); await sleep(state.balance.battle.attackMs); } else { actorSlot.root.classList.add('is-ranged-attacking'); const direction = state.slots.get(event.actorId) === 'right' ? 'left' : 'right'; elements.projectile.className = `projectile is-flying-${direction}`; await sleep(state.balance.battle.projectileMs); elements.impact.style.left = targetSlotName === 'left' ? '34%' : '66%'; elements.impact.style.top = '55%'; elements.impact.classList.add('is-visible'); await sleep(120); } }
+async function playSequence(events, battleId = null) { if (state.playing) return; state.playing = true; state.currentBattleId = battleId; elements.result.classList.remove('is-visible'); elements.log.replaceChildren(); for (const event of events) { if (event.type === 'battle:start') { setFighter('left', event.fighters[0]); setFighter('right', event.fighters[1]); elements.status.textContent = 'Бой начался'; addLog(`${event.fighters[0].username} против ${event.fighters[1].username}`); await sleep(900); } if (event.type === 'turn:start') { clearMotion(); elements.projectile.className = 'projectile'; elements.impact.className = 'impact'; elements.status.textContent = `Раунд ${event.turn}`; await sleep(state.balance.battle.turnDelayMs); } if (event.type === 'attack') await animateAttack(event); if (event.type === 'dodge') { const target = state.fighters.get(event.targetId); slotElements[state.slots.get(event.targetId)].root.classList.add('is-dodging'); floatText(event.targetId, 'УКЛОНЕНИЕ', 'is-dodge'); addLog(`${target.username} уклоняется от удара.`); await sleep(state.balance.battle.damagePauseMs); } if (event.type === 'damage') { const attacker = state.fighters.get(event.actorId); const target = state.fighters.get(event.targetId); target.hp = event.targetHp; updateHp(target.id, target.hp, target.maxHp); slotElements[state.slots.get(target.id)].root.classList.add('is-hurt'); floatText(target.id, event.critical ? `КРИТ -${event.damage}` : `-${event.damage}`, event.critical ? 'is-critical' : ''); addLog(`${attacker.username} наносит ${event.damage} урона${event.critical ? ' — критический удар!' : '.'}`); await sleep(state.balance.battle.damagePauseMs); } if (event.type === 'death') { clearMotion(); const loser = state.fighters.get(event.fighterId); slotElements[state.slots.get(event.fighterId)].root.classList.add('is-dead'); addLog(`${loser.username} повержен.`); await sleep(800); } if (event.type === 'battle:end') { const winner = state.fighters.get(event.winnerId); elements.status.textContent = 'Бой завершён'; elements.winnerName.textContent = winner.username; elements.winnerReward.textContent = `+${state.balance.progression.winnerXp} опыта`; elements.result.classList.add('is-visible'); await sleep(state.balance.battle.endPauseMs); } } state.playing = false; if (battleId && state.socket?.readyState === WebSocket.OPEN) state.socket.send(JSON.stringify({ type:'battle:complete', battleId })); }
+function resetArena() { clearMotion(); Object.values(slotElements).forEach((slot) => slot.root.classList.remove('is-dead')); elements.result.classList.remove('is-visible'); elements.projectile.className = 'projectile'; elements.impact.className = 'impact'; elements.status.textContent = 'Ожидание бойцов'; elements.log.innerHTML = '<li>Арена ожидает новых претендентов.</li>'; }
+function demoBattle() { if (state.playing) return; state.demoCounter += 1; const level = Math.min(12, 1 + state.demoCounter); const fighter1 = buildFighter({ id:'demo-left', username:'Asterion', classId:'gladiator', level }, state.classes); const fighter2 = buildFighter({ id:'demo-right', username:'FalconEye', classId:'hawkeye', level }, state.classes); const random = new SeededRandom(Date.now()); const battle = createBattle({ fighter1, fighter2, maxTurns:state.balance.battle.maxTurns, random:() => random.next() }); playSequence(battle.events); }
+function connectSocket() { const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'; const socket = new WebSocket(`${protocol}//${location.host}/ws`); state.socket = socket; socket.addEventListener('open', () => { elements.connectionDot.classList.add('is-online'); elements.connectionText.textContent = 'Relay подключён'; }); socket.addEventListener('close', () => { elements.connectionDot.classList.remove('is-online'); elements.connectionText.textContent = 'Relay отключён. Повтор…'; setTimeout(connectSocket, 1600); }); socket.addEventListener('message', ({ data }) => { try { const message = JSON.parse(data); if (message.type === 'queue:update') elements.queue.textContent = String(message.players.length); if (message.type === 'battle:sequence') playSequence(message.events, message.battleId); if (message.type === 'chat:reply') addReply(message.message); } catch (error) { console.error(error); } }); }
+function sendCommand(command = elements.command.value) { const username = elements.user.value.trim() || 'TestPlayer'; if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return addReply('Relay ещё не подключён.'); state.socket.send(JSON.stringify({ type:'chat:command', userId:`test:${username.toLowerCase()}`, username, text:command })); elements.command.value = command; }
+async function init() { [state.classes, state.balance] = await Promise.all([fetch('/config/classes.json').then((response) => response.json()), fetch('/config/balance.json').then((response) => response.json())]); if (new URLSearchParams(location.search).has('overlay')) document.body.classList.add('overlay-mode'); setFighter('left', buildFighter({ id:'preview-left', username:'Asterion', classId:'gladiator', level:1 }, state.classes)); setFighter('right', buildFighter({ id:'preview-right', username:'FalconEye', classId:'hawkeye', level:1 }, state.classes)); elements.start.addEventListener('click', demoBattle); elements.reset.addEventListener('click', resetArena); elements.form.addEventListener('submit', (event) => { event.preventDefault(); sendCommand(); }); document.querySelectorAll('[data-command]').forEach((button) => button.addEventListener('click', () => sendCommand(button.dataset.command))); connectSocket(); }
+init().catch((error) => { console.error(error); elements.status.textContent = 'Ошибка загрузки'; });

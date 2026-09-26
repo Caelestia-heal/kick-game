@@ -1,17 +1,20 @@
 {
-  "version": 1,
+  "version": 2,
   "battle": {
-    "turnDelayMs": 500,
-    "meleeApproachMs": 650,
-    "attackMs": 520,
-    "projectileMs": 430,
-    "damagePauseMs": 650,
-    "endPauseMs": 1800,
+    "turnDelayMs": 700,
+    "meleeApproachMs": 700,
+    "attackMs": 560,
+    "projectileMs": 520,
+    "damagePauseMs": 700,
+    "endPauseMs": 2200,
     "maxTurns": 100
   },
   "progression": {
     "winnerXp": 5,
     "loserXp": 1,
-    "pvpCooldownSeconds": 300
+    "pvpCooldownSeconds": 15
+  },
+  "queue": {
+    "minimumPlayers": 2
   }
 }

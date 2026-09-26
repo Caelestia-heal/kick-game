@@ -1,13 +1,13 @@
 {
   "name": "kick-duel-game",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Chat-controlled fantasy PvP arena for Kick and OBS",
   "scripts": {
     "start": "node relay/server.js",
     "test": "node --test tests/*.test.js",
-    "check": "node --check overlay/app.js && node --check src/game-core.js && node --check relay/server.js"
+    "check": "node --check overlay/app.js && node --check src/game-core.js && node --check src/game-manager.js && node --check src/player-store.js && node --check relay/server.js"
   },
   "dependencies": {
     "ws": "^8.18.3"

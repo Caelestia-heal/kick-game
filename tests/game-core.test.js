@@ -6,10 +6,10 @@ import { buildFighter, calculateAttack, createBattle, SeededRandom } from '../sr
 const classes = JSON.parse(fs.readFileSync(new URL('../config/classes.json', import.meta.url)));
 
 test('характеристики растут от уровня', () => {
-  const fighter = buildFighter({ id: '1', username: 'Test', classId: 'duelist', level: 5 }, classes);
-  assert.equal(fighter.maxHp, 108);
-  assert.equal(fighter.damage, 14);
-  assert.equal(fighter.dodgeChance, 4);
+  const fighter = buildFighter({ id: '1', username: 'Test', classId: 'gladiator', level: 5 }, classes);
+  assert.equal(fighter.maxHp, 122);
+  assert.equal(fighter.damage, 15);
+  assert.equal(fighter.dodgeChance, 1.4);
 });
 
 test('уклонение отменяет урон', () => {
@@ -20,8 +20,8 @@ test('уклонение отменяет урон', () => {
 
 test('бой всегда завершается победителем', () => {
   const random = new SeededRandom(42);
-  const fighter1 = buildFighter({ id: 'p1', username: 'A', classId: 'duelist' }, classes);
-  const fighter2 = buildFighter({ id: 'p2', username: 'B', classId: 'archer' }, classes);
+  const fighter1 = buildFighter({ id: 'p1', username: 'A', classId: 'gladiator' }, classes);
+  const fighter2 = buildFighter({ id: 'p2', username: 'B', classId: 'hawkeye' }, classes);
   const result = createBattle({ fighter1, fighter2, random: () => random.next() });
   assert.ok(result.winner);
   assert.equal(result.loser.hp, 0);

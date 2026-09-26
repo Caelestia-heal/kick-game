@@ -1,28 +1,28 @@
 {
-  "duelist": {
-    "id": "duelist",
-    "name": "Дуэлист",
+  "gladiator": {
+    "id": "gladiator",
+    "name": "Гладиатор",
     "role": "melee",
-    "baseHp": 100,
-    "baseDamage": 10,
-    "hpPerLevel": 2,
+    "baseHp": 110,
+    "baseDamage": 11,
+    "hpPerLevel": 3,
     "damagePerLevel": 1,
-    "dodgePerLevel": 1,
-    "critPerLevel": 0,
-    "critMultiplier": 1.75,
+    "dodgePerLevel": 0.35,
+    "critPerLevel": 0.25,
+    "critMultiplier": 1.65,
     "asset": "/overlay/assets/characters/duelist/idle.png"
   },
-  "archer": {
-    "id": "archer",
-    "name": "Стрелок",
+  "hawkeye": {
+    "id": "hawkeye",
+    "name": "Снайпер",
     "role": "ranged",
-    "baseHp": 100,
-    "baseDamage": 10,
+    "baseHp": 95,
+    "baseDamage": 12,
     "hpPerLevel": 2,
     "damagePerLevel": 1,
-    "dodgePerLevel": 0,
-    "critPerLevel": 1,
-    "critMultiplier": 1.75,
+    "dodgePerLevel": 0.2,
+    "critPerLevel": 0.8,
+    "critMultiplier": 1.85,
     "asset": "/overlay/assets/characters/archer/idle.png"
   }
 }
